@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Map Composer</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css" />
-  <link rel="stylesheet" href="styles.css?v=20260420-gadm4">
+  <link rel="stylesheet" href="styles.css?v=20260420-gadm5">
 </head>
 <body>
 <div class="app-wrapper">
@@ -56,18 +56,12 @@
 
         <section class="panel-section">
           <h2 class="section-label">Destination</h2>
-          <input id="place-input" type="text" class="text-input"
-                 placeholder="e.g. Iceland…" autocomplete="off" spellcheck="false" />
-          <button id="load-btn" class="btn btn-primary mt8">Load Map</button>
-
-          <div class="or-divider">or</div>
-
           <div class="gadm-search">
-            <input id="gadm-country-input" type="text" class="text-input"
-                   placeholder="Search local JSON country…" autocomplete="off" spellcheck="false" />
+            <input id="place-input" type="text" class="text-input"
+                   placeholder="Search country or region…" autocomplete="off" spellcheck="false" />
             <div id="gadm-suggestions" class="gadm-suggestions" role="listbox"></div>
           </div>
-          <button id="load-gadm-btn" class="btn btn-primary mt8">Load JSON Map</button>
+          <button id="load-btn" class="btn btn-primary mt8">Load Map</button>
 
           <div class="or-divider">or</div>
 
@@ -321,6 +315,6 @@
 <script src="https://cdn.jsdelivr.net/npm/leaflet.gridlayer.googlemutant@0.13.4/dist/Leaflet.GoogleMutant.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-<script src="script.js?v=20260420-gadm4"></script>
+<script src="script.js?v=20260420-gadm5"></script>
 </body>
 </html>

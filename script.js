@@ -542,7 +542,7 @@ function loadGADMJsonScript(code) {
   if (gadmScriptCache[code]) return Promise.resolve(gadmScriptCache[code]);
   if (gadmScriptPending[code]) return gadmScriptPending[code].promise;
 
-  const path = `gadm_js/gadm41_${code}_0.js?v=20260420-gadm4`;
+  const path = `gadm_js/gadm41_${code}_0.js?v=20260420-gadm5`;
   const script = document.createElement("script");
   script.src = path;
   script.async = true;
@@ -1891,8 +1891,6 @@ document.getElementById("point-input").addEventListener("keydown", e=>{ if(e.key
 
 const loadBtn    = document.getElementById("load-btn");
 const placeInput = document.getElementById("place-input");
-const gadmInput  = document.getElementById("gadm-country-input");
-const gadmLoadBtn = document.getElementById("load-gadm-btn");
 const gadmSuggestions = document.getElementById("gadm-suggestions");
 const spinner    = document.getElementById("spinner");
 const statusEl   = document.getElementById("status");
@@ -1907,6 +1905,12 @@ function setStatus(msg, ok=false) {
 async function loadMap() {
   const name = placeInput.value.trim();
   if (!name) { setStatus("Please enter a place name."); return; }
+
+  const gadmOption = resolveGADMInput();
+  if (gadmOption) {
+    await loadGADMMap(gadmOption);
+    return;
+  }
 
   loadBtn.disabled = true;
   spinner.classList.remove("hidden");
@@ -1925,7 +1929,6 @@ async function loadMap() {
 }
 
 loadBtn.addEventListener("click", loadMap);
-placeInput.addEventListener("keydown", e=>{ if(e.key==="Enter") loadMap(); });
 
 function hideGADMSuggestions() {
   activeGADMSuggestion = -1;
@@ -1935,9 +1938,9 @@ function hideGADMSuggestions() {
 
 function chooseGADMOption(option, loadNow = false) {
   selectedGADMOption = option;
-  gadmInput.value = `${option.name} (${option.code})`;
+  placeInput.value = option.name;
   hideGADMSuggestions();
-  if (loadNow) loadGADMMap();
+  if (loadNow) loadGADMMap(option);
 }
 
 function renderGADMSuggestions(matches) {
@@ -1964,20 +1967,22 @@ function renderGADMSuggestions(matches) {
 function updateGADMSuggestions() {
   selectedGADMOption = null;
   activeGADMSuggestion = -1;
-  renderGADMSuggestions(getGADMCountryMatches(gadmInput.value));
+  renderGADMSuggestions(getGADMCountryMatches(placeInput.value));
 }
 
 function resolveGADMInput() {
   if (selectedGADMOption) return selectedGADMOption;
-  const matches = getGADMCountryMatches(gadmInput.value);
-  return matches[0] || null;
+  const query = placeInput.value.trim();
+  const exactCode = lookupGADMCode(query);
+  const matches = getGADMCountryMatches(query);
+  if (exactCode) return matches.find(option => option.code === exactCode) || GADM_COUNTRIES.find(option => option.code === exactCode);
+  return null;
 }
 
-async function loadGADMMap() {
-  const option = resolveGADMInput();
-  if (!option) { setStatus("Please choose a country from the JSON list."); return; }
+async function loadGADMMap(option = resolveGADMInput()) {
+  if (!option) { setStatus("Please choose a country from the list or enter a region."); return; }
 
-  gadmLoadBtn.disabled = true;
+  loadBtn.disabled = true;
   spinner.classList.remove("hidden");
   setStatus(`Loading gadm_js/gadm41_${option.code}_0.js...`);
 
@@ -1985,21 +1990,22 @@ async function loadGADMMap() {
     const geometry = await fetchGADMFile(option.code);
     addGeoLayer(geometry, option.name, "file");
     placeInput.value = option.name;
-    chooseGADMOption(option);
+    selectedGADMOption = option;
+    hideGADMSuggestions();
     showSourceBadge(`GADM 4.1 · ${option.code}`, "natural-earth");
     setStatus(`Added JSON map: ${option.name}`, true);
   } catch(err) {
     setStatus(err.message);
   } finally {
-    gadmLoadBtn.disabled = false;
+    loadBtn.disabled = false;
     spinner.classList.add("hidden");
   }
 }
 
-gadmInput.addEventListener("input", updateGADMSuggestions);
-gadmInput.addEventListener("focus", () => renderGADMSuggestions(getGADMCountryMatches(gadmInput.value)));
-gadmInput.addEventListener("keydown", e => {
-  const matches = getGADMCountryMatches(gadmInput.value);
+placeInput.addEventListener("input", updateGADMSuggestions);
+placeInput.addEventListener("focus", () => renderGADMSuggestions(getGADMCountryMatches(placeInput.value)));
+placeInput.addEventListener("keydown", e => {
+  const matches = getGADMCountryMatches(placeInput.value);
   if (e.key === "ArrowDown" && matches.length) {
     e.preventDefault();
     activeGADMSuggestion = Math.min(activeGADMSuggestion + 1, matches.length - 1);
@@ -2011,13 +2017,16 @@ gadmInput.addEventListener("keydown", e => {
   } else if (e.key === "Enter") {
     e.preventDefault();
     const option = activeGADMSuggestion >= 0 ? matches[activeGADMSuggestion] : matches[0];
-    if (option) chooseGADMOption(option);
-    loadGADMMap();
+    if (option) {
+      chooseGADMOption(option);
+      loadGADMMap(option);
+    } else {
+      loadMap();
+    }
   } else if (e.key === "Escape") {
     hideGADMSuggestions();
   }
 });
-gadmLoadBtn.addEventListener("click", loadGADMMap);
 document.addEventListener("click", e => {
   if (!e.target.closest(".gadm-search")) hideGADMSuggestions();
 });
