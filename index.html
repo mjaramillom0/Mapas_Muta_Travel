@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Map Composer</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css" />
+  <link rel="stylesheet" href="styles.css?v=20260420-gadm4">
+</head>
+<body>
+<div class="app-wrapper">
+
+  <!-- ── HEADER TOOLBAR ─────────────────────────────────────── -->
+  <header class="app-header">
+    <span class="app-title">Map Composer</span>
+    <div class="header-actions">
+      <button class="hbtn" id="save-btn" title="Save project as JSON">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 2h9l3 3v9H2V2z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><rect x="5" y="9" width="6" height="5" rx="0.5" stroke="currentColor" stroke-width="1.4"/><rect x="5" y="2" width="5" height="3" rx="0.5" stroke="currentColor" stroke-width="1.4"/></svg>
+        Save
+      </button>
+      <label class="hbtn" for="load-project-input" title="Load saved project">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M1 4h5l1.5 2H15v8H1V4z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        Load
+        <input type="file" id="load-project-input" accept=".mapjson,.json" />
+      </label>
+      <div class="hbtn-divider"></div>
+      <button class="hbtn" id="export-svg-btn" title="Export as SVG (vector)">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1v9M4 6l4 4 4-4M2 13h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        SVG
+      </button>
+      <button class="hbtn hbtn-accent" id="export-png-btn" title="Export as PNG (full map)">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1v9M4 6l4 4 4-4M2 13h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        PNG
+      </button>
+      <div class="hbtn-divider"></div>
+      <button class="hbtn hbtn-icon" id="theme-btn" title="Toggle light / dark theme">
+        <!-- icon swapped by JS -->
+        <svg id="theme-icon-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/>
+          <line x1="4.22" y1="4.22" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.78" y2="19.78"/>
+          <line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/>
+          <line x1="4.22" y1="19.78" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.78" y2="4.22"/>
+        </svg>
+        <svg id="theme-icon-moon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="display:none">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="app">
+
+    <!-- ── LEFT PANEL ─────────────────────────────────────── -->
+    <aside class="panel panel-left">
+      <div class="panel-scroll">
+
+        <section class="panel-section">
+          <h2 class="section-label">Destination</h2>
+          <input id="place-input" type="text" class="text-input"
+                 placeholder="e.g. Iceland…" autocomplete="off" spellcheck="false" />
+          <button id="load-btn" class="btn btn-primary mt8">Load Map</button>
+
+          <div class="or-divider">or</div>
+
+          <div class="gadm-search">
+            <input id="gadm-country-input" type="text" class="text-input"
+                   placeholder="Search local JSON country…" autocomplete="off" spellcheck="false" />
+            <div id="gadm-suggestions" class="gadm-suggestions" role="listbox"></div>
+          </div>
+          <button id="load-gadm-btn" class="btn btn-primary mt8">Load JSON Map</button>
+
+          <div class="or-divider">or</div>
+
+          <label class="upload-btn" for="geojson-upload">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <path d="M8 1v9M4 5l4-4 4 4M2 13h12" stroke="currentColor" stroke-width="1.6"
+                    stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Upload GeoJSON
+            <input type="file" id="geojson-upload" accept=".json,.geojson" multiple />
+          </label>
+          <div id="geo-layer-list" class="geo-layer-list" style="display:none"></div>
+        </section>
+
+        <section class="panel-section">
+          <h2 class="section-label">Map</h2>
+
+          <div class="control-row">
+            <span>Basemap</span>
+            <select id="basemap-select" class="select-input">
+              <option value="none">None</option>
+              <option value="osm">OpenStreetMap</option>
+              <option value="carto-light">CartoDB Light</option>
+              <option value="carto-dark">CartoDB Dark</option>
+              <optgroup label="── Google Maps ──">
+                <option value="google-roadmap">Google Roads</option>
+                <option value="google-satellite">Google Satellite</option>
+                <option value="google-hybrid">Google Hybrid</option>
+              </optgroup>
+            </select>
+          </div>
+
+          <div id="google-key-row" class="google-key-row hidden">
+            <input type="text" id="google-api-key" class="text-input"
+                   placeholder="Google Maps API key  (AIza…)" autocomplete="off" />
+            <button id="apply-basemap-btn" class="btn btn-primary mt8">Apply</button>
+          </div>
+
+          <div class="control-row">
+            <span>Background</span>
+            <input type="color" id="bg-color" value="#ffffff" />
+          </div>
+          <div class="control-row">
+            <span>Fill color</span>
+            <input type="color" id="fill-color" value="#BACCC6" />
+          </div>
+          <div class="control-row">
+            <span>Fill opacity</span>
+            <input type="range" id="fill-opacity" min="0" max="1" value="1" step="0.05" />
+            <span class="range-val" id="fill-opacity-val">1</span>
+          </div>
+          <div class="control-row">
+            <span>Detail</span>
+            <select id="map-resolution" class="select-input">
+              <option value="50m" selected>50m — elegant</option>
+              <option value="110m">110m — minimal</option>
+            </select>
+          </div>
+          <div id="source-badge" class="source-badge hidden"></div>
+        </section>
+
+        <section class="panel-section">
+          <h2 class="section-label">Markers</h2>
+          <div class="control-row">
+            <span>Show all</span>
+            <input type="checkbox" id="show-all-points" checked />
+          </div>
+          <div class="control-row">
+            <span>Color</span>
+            <input type="color" id="marker-color" value="#044040" />
+          </div>
+          <div class="control-row">
+            <span>Size</span>
+            <input type="range" id="marker-size" min="2" max="14" value="6" step="0.5" />
+            <span class="range-val" id="marker-size-val">6</span>
+          </div>
+          <div class="control-row">
+            <span>Opacity</span>
+            <input type="range" id="marker-opacity" min="0" max="1" value="1" step="0.05" />
+            <span class="range-val" id="marker-opacity-val">1</span>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <h2 class="section-label">Labels</h2>
+          <div class="control-row">
+            <span>Show all</span>
+            <input type="checkbox" id="show-all-labels" checked />
+          </div>
+          <div class="control-row">
+            <span>Color</span>
+            <input type="color" id="label-color" value="#044040" />
+          </div>
+          <div class="control-row">
+            <span>Size</span>
+            <input type="range" id="label-size" min="6" max="22" value="11" step="0.5" />
+            <span class="range-val" id="label-size-val">11</span>
+          </div>
+          <div class="control-row">
+            <span>Opacity</span>
+            <input type="range" id="label-opacity" min="0" max="1" value="1" step="0.05" />
+            <span class="range-val" id="label-opacity-val">1</span>
+          </div>
+          <div class="control-row">
+            <span>Bold</span>
+            <input type="checkbox" id="label-bold" />
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <h2 class="section-label">Region Labels</h2>
+          <div class="control-row">
+            <span>Show all</span>
+            <input type="checkbox" id="show-all-annotations" checked />
+          </div>
+          <div class="control-row">
+            <span>Color</span>
+            <input type="color" id="annotation-color" value="#044040" />
+          </div>
+          <div class="control-row">
+            <span>Size</span>
+            <input type="range" id="annotation-size" min="8" max="72" value="22" step="1" />
+            <span class="range-val" id="annotation-size-val">22</span>
+          </div>
+          <div class="control-row">
+            <span>Opacity</span>
+            <input type="range" id="annotation-opacity" min="0" max="1" value="0.85" step="0.05" />
+            <span class="range-val" id="annotation-opacity-val">0.85</span>
+          </div>
+          <div class="control-row">
+            <span>Bold</span>
+            <input type="checkbox" id="annotation-bold" checked />
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <h2 class="section-label">Route</h2>
+          <div class="control-row">
+            <span>Visible</span>
+            <input type="checkbox" id="route-visible" checked />
+          </div>
+          <div class="control-row">
+            <span>Color</span>
+            <input type="color" id="route-color" value="#044040" />
+          </div>
+          <div class="control-row">
+            <span>Width</span>
+            <input type="range" id="route-width" min="0.5" max="8" value="2" step="0.5" />
+            <span class="range-val" id="route-width-val">2</span>
+          </div>
+          <div class="control-row">
+            <span>Opacity</span>
+            <input type="range" id="route-opacity" min="0" max="1" value="0.85" step="0.05" />
+            <span class="range-val" id="route-opacity-val">0.85</span>
+          </div>
+          <div class="control-row">
+            <span>Line style</span>
+            <select id="route-dash" class="select-input">
+              <option value="none">Solid</option>
+              <option value="8,5">Dashed</option>
+              <option value="2,4">Dotted</option>
+              <option value="16,6,4,6">Long dash</option>
+            </select>
+          </div>
+          <div class="control-row">
+            <span>Transport icons</span>
+            <input type="checkbox" id="show-transport-icons" checked />
+          </div>
+          <div class="control-row">
+            <span>Edit path</span>
+            <button id="route-edit-btn" class="btn-route-edit" title="Toggle route editing — click path to add waypoints, drag to reshape, double-click to remove">Edit</button>
+          </div>
+        </section>
+
+      </div>
+    </aside>
+
+    <!-- ── CENTER: MAP ─────────────────────────────────────── -->
+    <main class="map-area">
+      <div class="preview-box">
+
+        <div id="map-container"></div>
+
+        <svg id="overlay-svg" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="route-arrow" markerWidth="6" markerHeight="6"
+                    refX="5" refY="3" orient="auto">
+              <path d="M 0 0 L 6 3 L 0 6 Z" id="arrow-shape" fill="#d94a4a" />
+            </marker>
+          </defs>
+          <g id="layer-map"></g>
+          <g id="layer-annotations"></g>
+          <g id="layer-route"></g>
+          <g id="layer-markers"></g>
+          <g id="layer-labels"></g>
+        </svg>
+
+        <div id="placeholder-overlay" class="placeholder-overlay">
+          Load a destination above or upload a GeoJSON file
+        </div>
+
+        <div id="spinner" class="spinner hidden"></div>
+      </div>
+      <p id="status" class="status"></p>
+    </main>
+
+    <!-- ── RIGHT PANEL: POINTS ────────────────────────────── -->
+    <aside class="panel panel-right">
+      <div class="panel-scroll">
+
+        <section class="panel-section">
+          <h2 class="section-label">Points</h2>
+          <div class="add-point-row">
+            <input id="point-input" type="text" class="text-input"
+                   placeholder="Add place…" autocomplete="off" spellcheck="false" />
+            <select id="point-category" class="select-input">
+              <option value="city">City</option>
+              <option value="town">Town</option>
+              <option value="lake">Lake</option>
+              <option value="mountain">Mountain</option>
+              <option value="volcano">Volcano</option>
+              <option value="glacier">Glacier</option>
+              <option value="waterfall">Waterfall</option>
+              <option value="landmark">Landmark</option>
+              <option value="other">Other</option>
+            </select>
+            <button id="add-point-btn" class="btn btn-primary btn-icon">+</button>
+          </div>
+          <div id="point-list" class="point-list"></div>
+        </section>
+
+        <section class="panel-section">
+          <h2 class="section-label">Region Labels</h2>
+          <p class="ann-hint">Geocode a place name and float a large label over it — great for country or region names.</p>
+          <div class="add-point-row">
+            <input id="annotation-input" type="text" class="text-input"
+                   placeholder="e.g. France…" autocomplete="off" spellcheck="false" />
+            <button id="add-annotation-btn" class="btn btn-primary btn-icon">+</button>
+          </div>
+          <div id="annotation-list" class="annotation-list"></div>
+        </section>
+
+      </div>
+    </aside>
+
+  </div><!-- /.app -->
+</div><!-- /.app-wrapper -->
+
+<!-- External libraries -->
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet.gridlayer.googlemutant@0.13.4/dist/Leaflet.GoogleMutant.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="script.js?v=20260420-gadm4"></script>
+</body>
+</html>
