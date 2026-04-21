@@ -542,7 +542,7 @@ function loadGADMJsonScript(code) {
   if (gadmScriptCache[code]) return Promise.resolve(gadmScriptCache[code]);
   if (gadmScriptPending[code]) return gadmScriptPending[code].promise;
 
-  const path = `gadm_js/gadm41_${code}_0.js?v=20260420-gadm5`;
+  const path = `gadm_js/gadm41_${code}_0.js?v=20260420-gadm6`;
   const script = document.createElement("script");
   script.src = path;
   script.async = true;
@@ -1237,6 +1237,32 @@ async function addAnnotation(text) {
     a.status = "ok";
   } catch (err) {
     a.status = "error"; a.error = err.message;
+  }
+
+  renderAnnotationList();
+  renderAnnotations();
+}
+
+function addAnnotationAt(text, lat, lon) {
+  text = text.trim();
+  if (!text || !Number.isFinite(lat) || !Number.isFinite(lon)) return;
+
+  const existing = annotations.find(a => a.text === text && Math.abs((a.lat ?? 999) - lat) < 0.0001 && Math.abs((a.lon ?? 999) - lon) < 0.0001);
+  if (existing) {
+    existing.visible = true;
+    existing.status = "ok";
+    existing.error = null;
+  } else {
+    annotations.push({
+      id: uid(),
+      text,
+      lat,
+      lon,
+      offset: { dx: 0, dy: 0 },
+      visible: true,
+      status: "ok",
+      error: null,
+    });
   }
 
   renderAnnotationList();
@@ -1989,6 +2015,8 @@ async function loadGADMMap(option = resolveGADMInput()) {
   try {
     const geometry = await fetchGADMFile(option.code);
     addGeoLayer(geometry, option.name, "file");
+    const bounds = geometryBBox(geometry);
+    addAnnotationAt(option.name, (bounds.minLat + bounds.maxLat) / 2, (bounds.minLon + bounds.maxLon) / 2);
     placeInput.value = option.name;
     selectedGADMOption = option;
     hideGADMSuggestions();
