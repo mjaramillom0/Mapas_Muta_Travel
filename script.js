@@ -1797,16 +1797,20 @@ function renderPointList() {
       item.appendChild(dis);
     }
 
-    // Transport-after row (shown when point is in route)
+    // Dedicated transport section (shown when point is in route)
     if (p.inRoute) {
+      const tsec = document.createElement("div");
+      tsec.className = "pt-transport-section";
+
+      const thead = document.createElement("div");
+      thead.className = "pt-transport-heading";
+      thead.textContent = "Transport to next stop";
+
       const trow = document.createElement("div");
       trow.className = "pt-transport-row";
 
-      const tlabel = document.createElement("span");
-      tlabel.className = "pt-transport-label";
-      tlabel.textContent = "Transport to next stop";
-
       const tsel = document.createElement("select");
+      tsel.className = "pt-transport-select";
       tsel.title = "Transport used from this stop to the next one";
       TRANSPORT_OPTIONS.forEach(opt => {
         const o = document.createElement("option");
@@ -1818,9 +1822,10 @@ function renderPointList() {
       tsel.addEventListener("change", () => { p.transportAfter = tsel.value; renderRoute(); });
       tsel.addEventListener("mousedown", e => e.stopPropagation());
 
-      trow.appendChild(tlabel);
       trow.appendChild(tsel);
-      item.appendChild(trow);
+      tsec.appendChild(thead);
+      tsec.appendChild(trow);
+      item.appendChild(tsec);
     }
 
     list.appendChild(item);
