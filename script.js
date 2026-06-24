@@ -1803,9 +1803,11 @@ function renderPointList() {
       trow.className = "pt-transport-row";
 
       const tlabel = document.createElement("span");
-      tlabel.textContent = "→";
+      tlabel.className = "pt-transport-label";
+      tlabel.textContent = "Transport to next stop";
 
       const tsel = document.createElement("select");
+      tsel.title = "Transport used from this stop to the next one";
       TRANSPORT_OPTIONS.forEach(opt => {
         const o = document.createElement("option");
         o.value = opt.value;

@@ -635,9 +635,16 @@ body {
 /* ── Transport row ────────────────────────────────────────────── */
 
 .pt-transport-row {
-  display: flex; align-items: center; gap: 5px;
-  padding: 3px 0 1px 22px;
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 0 1px 22px;
   font-size: 0.69rem; color: var(--text-3);
+  flex-wrap: wrap;
+}
+.pt-transport-label {
+  min-width: 112px;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--text-2);
 }
 .pt-transport-row select {
   height: 22px; font-size: 0.69rem;
