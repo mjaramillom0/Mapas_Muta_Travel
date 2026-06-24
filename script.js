@@ -1763,6 +1763,32 @@ function renderPointList() {
 
     info.appendChild(labelInput); info.appendChild(meta);
 
+    if (p.inRoute) {
+      const tsec = document.createElement("div");
+      tsec.className = "pt-transport-inline";
+
+      const tlabel = document.createElement("label");
+      tlabel.className = "pt-transport-label";
+      tlabel.textContent = "Transport to next stop";
+
+      const tsel = document.createElement("select");
+      tsel.className = "pt-transport-select";
+      tsel.title = "Transport used from this stop to the next one";
+      TRANSPORT_OPTIONS.forEach(opt => {
+        const o = document.createElement("option");
+        o.value = opt.value;
+        o.textContent = opt.label;
+        if (opt.value === p.transportAfter) o.selected = true;
+        tsel.appendChild(o);
+      });
+      tsel.addEventListener("change", () => { p.transportAfter = tsel.value; renderRoute(); });
+      tsel.addEventListener("mousedown", e => e.stopPropagation());
+
+      tsec.appendChild(tlabel);
+      tsec.appendChild(tsel);
+      info.appendChild(tsec);
+    }
+
     const toggles = document.createElement("div");
     toggles.className = "pt-toggles";
     [
@@ -1795,37 +1821,6 @@ function renderPointList() {
         dis.appendChild(btn);
       });
       item.appendChild(dis);
-    }
-
-    // Dedicated transport section (shown when point is in route)
-    if (p.inRoute) {
-      const tsec = document.createElement("div");
-      tsec.className = "pt-transport-section";
-
-      const thead = document.createElement("div");
-      thead.className = "pt-transport-heading";
-      thead.textContent = "Transport to next stop";
-
-      const trow = document.createElement("div");
-      trow.className = "pt-transport-row";
-
-      const tsel = document.createElement("select");
-      tsel.className = "pt-transport-select";
-      tsel.title = "Transport used from this stop to the next one";
-      TRANSPORT_OPTIONS.forEach(opt => {
-        const o = document.createElement("option");
-        o.value = opt.value;
-        o.textContent = opt.label;
-        if (opt.value === p.transportAfter) o.selected = true;
-        tsel.appendChild(o);
-      });
-      tsel.addEventListener("change", () => { p.transportAfter = tsel.value; renderRoute(); });
-      tsel.addEventListener("mousedown", e => e.stopPropagation());
-
-      trow.appendChild(tsel);
-      tsec.appendChild(thead);
-      tsec.appendChild(trow);
-      item.appendChild(tsec);
     }
 
     list.appendChild(item);

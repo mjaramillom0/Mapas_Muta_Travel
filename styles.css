@@ -632,27 +632,20 @@ body {
 }
 .candidate-btn:hover { background: var(--accent-dim); }
 
-/* ── Transport section ────────────────────────────────────────── */
+/* ── Transport selector ──────────────────────────────────────── */
 
-.pt-transport-section {
-  margin-top: 6px;
-  margin-left: 22px;
-  padding: 7px 8px;
-  background: var(--panel-bg);
-  border: 1px solid var(--panel-border);
-  border-radius: 6px;
+.pt-transport-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 5px;
 }
-.pt-transport-heading {
-  margin-bottom: 5px;
+.pt-transport-label {
   font-size: 0.64rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-2);
-}
-.pt-transport-row {
-  display: flex;
-  align-items: center;
 }
 .pt-transport-select {
   width: 100%;
