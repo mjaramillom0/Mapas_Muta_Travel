@@ -717,6 +717,7 @@ const style = {
   routeColor:           "#044040",
   routeWidth:           2,
   routeOpacity:         0.85,
+  routeArrowSize:       12,
   routeDash:            "none",
   showTransportIcons:   true,
 };
@@ -805,19 +806,30 @@ function getSegmentKey(p1, p2) {
   return `${p1.src.id}--${p2.src.id}`;
 }
 
-// Builds the complete flat point list for Catmull-Rom: anchor → waypoints → anchor → …
+function getSegmentPts(routePoints, index) {
+  const fromPt = routePoints[index];
+  const toPt = routePoints[index + 1];
+  if (!fromPt || !toPt) return [];
+
+  const segKey = getSegmentKey(fromPt, toPt);
+  const pts = [{ ...fromPt, isAnchor: true, segKey, anchorIndex: index }];
+  const wps = routeWaypoints[segKey] || [];
+  wps.forEach((wp, wi) => {
+    const proj = leafletMap.latLngToContainerPoint([wp.lat, wp.lon]);
+    pts.push({ x: proj.x, y: proj.y, isWaypoint: true, segKey, wpIndex: wi, anchorIndex: index });
+  });
+  pts.push({ ...toPt, isAnchor: true, segKey, anchorIndex: index + 1 });
+  return pts;
+}
+
 function buildAllRoutePts(routePoints) {
   const allPts = [];
-  for (let i = 0; i < routePoints.length; i++) {
-    allPts.push({ ...routePoints[i], isAnchor: true });
-    if (i < routePoints.length - 1) {
-      const segKey = getSegmentKey(routePoints[i], routePoints[i + 1]);
-      const wps = routeWaypoints[segKey] || [];
-      wps.forEach((wp, wi) => {
-        const proj = leafletMap.latLngToContainerPoint([wp.lat, wp.lon]);
-        allPts.push({ x: proj.x, y: proj.y, isWaypoint: true, segKey, wpIndex: wi });
-      });
-    }
+  for (let i = 0; i < routePoints.length - 1; i++) {
+    const segPts = getSegmentPts(routePoints, i);
+    segPts.forEach((pt, idx) => {
+      if (i > 0 && idx === 0) return;
+      allPts.push(pt);
+    });
   }
   return allPts;
 }
@@ -869,15 +881,51 @@ function insertWaypointSorted(segKey, fromPt, toPt, lat, lon) {
 
 function catmullRomPath(pts) {
   if (pts.length < 2) return "";
-  const t = 0.4;
+  const t = 1 / 6;
   let d = `M ${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
-  for (let i = 0; i < pts.length-1; i++) {
-    const p0=pts[Math.max(0,i-1)], p1=pts[i], p2=pts[i+1], p3=pts[Math.min(pts.length-1,i+2)];
-    const cp1x=p1.x+(p2.x-p0.x)*t, cp1y=p1.y+(p2.y-p0.y)*t;
-    const cp2x=p2.x-(p3.x-p1.x)*t, cp2y=p2.y-(p3.y-p1.y)*t;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[Math.min(pts.length - 1, i + 2)];
+    const cp1x = p1.x + (p2.x - p0.x) * t;
+    const cp1y = p1.y + (p2.y - p0.y) * t;
+    const cp2x = p2.x - (p3.x - p1.x) * t;
+    const cp2y = p2.y - (p3.y - p1.y) * t;
     d += ` C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
   }
   return d;
+}
+
+function quadraticArcPath(start, through, end) {
+  const cx = 2 * through.x - (start.x + end.x) / 2;
+  const cy = 2 * through.y - (start.y + end.y) / 2;
+  return `M ${start.x.toFixed(1)},${start.y.toFixed(1)} Q ${cx.toFixed(1)},${cy.toFixed(1)} ${end.x.toFixed(1)},${end.y.toFixed(1)}`;
+}
+
+function buildSegmentPath(routePoints, index) {
+  const pts = getSegmentPts(routePoints, index).map(p => ({ x: p.x, y: p.y }));
+  if (pts.length < 2) return "";
+  if (pts.length === 2) {
+    return `M ${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)} L ${pts[1].x.toFixed(1)},${pts[1].y.toFixed(1)}`;
+  }
+  if (pts.length === 3) {
+    return quadraticArcPath(pts[0], pts[1], pts[2]);
+  }
+  return catmullRomPath(pts);
+}
+
+function getSegmentTransportMeta(routePoints, index) {
+  const transport = routePoints[index]?.src?.transportAfter || "none";
+  const opt = TRANSPORT_OPTIONS.find(o => o.value === transport) || TRANSPORT_OPTIONS[0];
+  const isDotted = opt.mode === "air" || opt.mode === "water";
+  return {
+    transport,
+    option: opt,
+    isDotted,
+    showArrow: !isDotted,
+    showIcon: isDotted && !!opt.icon,
+  };
 }
 
 
@@ -918,86 +966,100 @@ function renderRoute() {
     arrowShape.setAttribute("fill-opacity", style.routeOpacity);
   }
 
-  // Build full point list (anchors interleaved with waypoints)
   const allPts = buildAllRoutePts(routePoints);
-  const pathD  = catmullRomPath(allPts.map(p => ({ x: p.x, y: p.y })));
+  const segmentPaths = [];
+  for (let i = 0; i < routePoints.length - 1; i++) {
+    segmentPaths.push({ index: i, d: buildSegmentPath(routePoints, i), meta: getSegmentTransportMeta(routePoints, i) });
+  }
 
-  // ── Edit mode: transparent wide hit-area (click to add waypoint) ──
   if (routeEditMode) {
-    const hitPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    hitPath.setAttribute("d", pathD);
-    hitPath.setAttribute("fill", "none");
-    hitPath.setAttribute("stroke", "transparent");
-    hitPath.setAttribute("stroke-width", String(Math.max(style.routeWidth + 14, 22)));
-    hitPath.style.pointerEvents = "stroke";
-    hitPath.style.cursor = "crosshair";
-    hitPath.addEventListener("click", e => {
-      e.stopPropagation();
-      const pos    = clientToSVG(e);
-      const segIdx = findNearestAnchorSegment(pos.x, pos.y, routePoints);
-      if (segIdx < 0 || segIdx >= routePoints.length - 1) return;
-      const segKey = getSegmentKey(routePoints[segIdx], routePoints[segIdx + 1]);
-      const ll     = leafletMap.containerPointToLatLng([pos.x, pos.y]);
-      insertWaypointSorted(segKey, routePoints[segIdx], routePoints[segIdx + 1], ll.lat, ll.lng);
-      renderRoute();
+    segmentPaths.forEach(({ index, d }) => {
+      const hitPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      hitPath.setAttribute("d", d);
+      hitPath.setAttribute("fill", "none");
+      hitPath.setAttribute("stroke", "transparent");
+      hitPath.setAttribute("stroke-width", String(Math.max(style.routeWidth + 14, 22)));
+      hitPath.style.pointerEvents = "stroke";
+      hitPath.style.cursor = "crosshair";
+      hitPath.addEventListener("click", e => {
+        e.stopPropagation();
+        const pos = clientToSVG(e);
+        const segKey = getSegmentKey(routePoints[index], routePoints[index + 1]);
+        const ll = leafletMap.containerPointToLatLng([pos.x, pos.y]);
+        insertWaypointSorted(segKey, routePoints[index], routePoints[index + 1], ll.lat, ll.lng);
+        renderRoute();
+      });
+      g.appendChild(hitPath);
     });
-    g.appendChild(hitPath);
   }
 
-  // ── Visible route path ──
-  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  path.setAttribute("d", pathD);
-  path.setAttribute("fill", "none");
-  path.setAttribute("stroke", style.routeColor);
-  path.setAttribute("stroke-width", style.routeWidth);
-  path.setAttribute("stroke-opacity", style.routeOpacity);
-  path.setAttribute("stroke-linecap", "round");
-  path.setAttribute("stroke-linejoin", "round");
-  path.setAttribute("marker-end", "url(#route-arrow)");
-  if (style.routeDash && style.routeDash !== "none") {
-    path.setAttribute("stroke-dasharray", style.routeDash);
-  }
-  g.appendChild(path);
-
-  // ── Transport icons — one per segment, at the geometric midpoint ──
-  if (style.showTransportIcons) {
-    for (let i = 0; i < routePoints.length - 1; i++) {
-      const src       = routePoints[i].src;
-      const transport = src.transportAfter;
-      if (!transport || transport === "none") continue;
-      const opt = TRANSPORT_OPTIONS.find(o => o.value === transport);
-      if (!opt || !opt.icon) continue;
-
-      const mx    = (routePoints[i].x + routePoints[i + 1].x) / 2;
-      const my    = (routePoints[i].y + routePoints[i + 1].y) / 2;
-      const iconR = Math.max(style.routeWidth * 2.5, 11);
-
-      const grp = document.createElementNS("http://www.w3.org/2000/svg", "g");
-      grp.setAttribute("class", "transport-icon");
-
-      const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      circle.setAttribute("cx", mx.toFixed(1));
-      circle.setAttribute("cy", my.toFixed(1));
-      circle.setAttribute("r",  iconR);
-      circle.setAttribute("fill", "#fff");
-      circle.setAttribute("stroke", style.routeColor);
-      circle.setAttribute("stroke-width", "1.2");
-      circle.setAttribute("stroke-opacity", style.routeOpacity);
-
-      const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      txt.setAttribute("x", mx.toFixed(1));
-      txt.setAttribute("y", my.toFixed(1));
-      txt.setAttribute("text-anchor", "middle");
-      txt.setAttribute("dominant-baseline", "central");
-      txt.setAttribute("font-size", (iconR * 1.15).toFixed(1));
-      txt.setAttribute("font-family", "Apple Color Emoji,Segoe UI Emoji,sans-serif");
-      txt.textContent = opt.icon;
-
-      grp.appendChild(circle);
-      grp.appendChild(txt);
-      g.appendChild(grp);
+  segmentPaths.forEach(({ d, meta }) => {
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", d);
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", style.routeColor);
+    path.setAttribute("stroke-width", style.routeWidth);
+    path.setAttribute("stroke-opacity", style.routeOpacity);
+    path.setAttribute("stroke-linecap", "round");
+    path.setAttribute("stroke-linejoin", "round");
+    if (meta.isDotted) {
+      path.setAttribute("stroke-dasharray", "8,8");
+    } else if (style.routeDash && style.routeDash !== "none") {
+      path.setAttribute("stroke-dasharray", style.routeDash);
     }
-  }
+    g.appendChild(path);
+
+    const total = path.getTotalLength?.() || 0;
+    if (total > 4) {
+      const mid = total / 2;
+      const delta = Math.max(2, Math.min(10, total / 6));
+      const p1 = path.getPointAtLength(Math.max(0, mid - delta));
+      const p2 = path.getPointAtLength(Math.min(total, mid + delta));
+      const pm = path.getPointAtLength(mid);
+      const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180 / Math.PI;
+
+      if (meta.showArrow) {
+        const arrowW = style.routeArrowSize;
+        const arrowH = Math.max(4, style.routeArrowSize * 0.66);
+        const arrowTip = Math.max(2, style.routeArrowSize * 0.33);
+        const arrow = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        arrow.setAttribute("d", "M " + (-arrowW / 2).toFixed(1) + " " + (-arrowH / 2).toFixed(1) + " L " + (arrowTip).toFixed(1) + " 0 L " + (-arrowW / 2).toFixed(1) + " " + (arrowH / 2).toFixed(1) + " Z");
+        arrow.setAttribute("fill", style.routeColor);
+        arrow.setAttribute("fill-opacity", style.routeOpacity);
+        arrow.setAttribute("transform", "translate(" + pm.x.toFixed(1) + " " + pm.y.toFixed(1) + ") rotate(" + angle.toFixed(1) + ")");
+        arrow.setAttribute("class", "route-direction-arrow");
+        g.appendChild(arrow);
+      }
+
+      if (style.showTransportIcons && meta.showIcon) {
+        const iconR = Math.max(style.routeWidth * 2.5, 11);
+        const grp = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        grp.setAttribute("class", "transport-icon");
+
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute("cx", pm.x.toFixed(1));
+        circle.setAttribute("cy", pm.y.toFixed(1));
+        circle.setAttribute("r", iconR);
+        circle.setAttribute("fill", "#fff");
+        circle.setAttribute("stroke", style.routeColor);
+        circle.setAttribute("stroke-width", "1.2");
+        circle.setAttribute("stroke-opacity", style.routeOpacity);
+
+        const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        txt.setAttribute("x", pm.x.toFixed(1));
+        txt.setAttribute("y", pm.y.toFixed(1));
+        txt.setAttribute("text-anchor", "middle");
+        txt.setAttribute("dominant-baseline", "central");
+        txt.setAttribute("font-size", (iconR * 1.15).toFixed(1));
+        txt.setAttribute("font-family", "Apple Color Emoji,Segoe UI Emoji,sans-serif");
+        txt.textContent = meta.option.icon;
+
+        grp.appendChild(circle);
+        grp.appendChild(txt);
+        g.appendChild(grp);
+      }
+    }
+  });
 
   // ── Edit mode: draggable waypoint handles ──
   if (routeEditMode) {
@@ -1597,14 +1659,14 @@ function renderLayerList() {
 
 // Transport type labels and emoji for each option
 const TRANSPORT_OPTIONS = [
-  { value:"none",    label:"— none",    icon:""   },
-  { value:"plane",   label:"✈ Flight",  icon:"✈"  },
-  { value:"train",   label:"🚆 Train",   icon:"🚆" },
-  { value:"car",     label:"🚗 Car",     icon:"🚗" },
-  { value:"boat",    label:"⛵ Boat",    icon:"⛵" },
-  { value:"bus",     label:"🚌 Bus",     icon:"🚌" },
-  { value:"bike",    label:"🚲 Bike",    icon:"🚲" },
-  { value:"walk",    label:"🚶 Walk",    icon:"🚶" },
+  { value:"none",    label:"— none",    icon:"",  mode:"ground" },
+  { value:"plane",   label:"✈ Flight",  icon:"✈", mode:"air" },
+  { value:"train",   label:"🚆 Train",   icon:"🚆", mode:"ground" },
+  { value:"car",     label:"🚗 Car",     icon:"🚗", mode:"ground" },
+  { value:"boat",    label:"⛵ Ferry/Boat", icon:"⛵", mode:"water" },
+  { value:"bus",     label:"🚌 Bus",     icon:"🚌", mode:"ground" },
+  { value:"bike",    label:"🚲 Bike",    icon:"🚲", mode:"ground" },
+  { value:"walk",    label:"🚶 Walk",    icon:"🚶", mode:"ground" },
 ];
 
 function createPoint(query, category="city") {
@@ -1879,6 +1941,7 @@ bindCheck("route-visible",  "routeVisible",  renderRoute);
 bindColor("route-color",    "routeColor",    renderRoute);
 bindRange("route-width",    "route-width-val",   "routeWidth",   renderRoute);
 bindRange("route-opacity",  "route-opacity-val", "routeOpacity", renderRoute);
+bindRange("route-arrow-size", "route-arrow-size-val", "routeArrowSize", renderRoute);
 document.getElementById("route-dash").addEventListener("change", e => { style.routeDash = e.target.value; renderRoute(); });
 bindCheck("show-transport-icons","showTransportIcons", renderRoute);
 
@@ -2168,6 +2231,7 @@ function syncUIFromStyle() {
   set("route-color",   style.routeColor);
   set("route-width",   style.routeWidth);             setTxt("route-width-val",   style.routeWidth);
   set("route-opacity", style.routeOpacity);           setTxt("route-opacity-val", style.routeOpacity);
+  set("route-arrow-size", style.routeArrowSize);     setTxt("route-arrow-size-val", style.routeArrowSize);
   set("route-dash",    style.routeDash);
   setChk("show-transport-icons",style.showTransportIcons);
 }
@@ -2189,13 +2253,12 @@ document.getElementById("load-project-input").addEventListener("change", async f
 
 // ─── Export ───────────────────────────────────────────────────────────────────
 
-function exportSVG() {
+function buildOverlayExportSVG(includeBackground = true, silhouetteMode = false) {
   const box    = document.querySelector(".preview-box");
   const w      = box.clientWidth;
   const h      = box.clientHeight;
   const svgSrc = document.getElementById("overlay-svg");
 
-  // Build a standalone SVG with background + all overlay content
   const ns  = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
   svg.setAttribute("xmlns", ns);
@@ -2203,16 +2266,42 @@ function exportSVG() {
   svg.setAttribute("height", h);
   svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
 
-  // Background rect
-  const bg = document.createElementNS(ns, "rect");
-  bg.setAttribute("width",  w);
-  bg.setAttribute("height", h);
-  bg.setAttribute("fill", style.bgColor);
-  svg.appendChild(bg);
+  if (includeBackground) {
+    const bg = document.createElementNS(ns, "rect");
+    bg.setAttribute("width",  w);
+    bg.setAttribute("height", h);
+    bg.setAttribute("fill", style.bgColor);
+    svg.appendChild(bg);
+  }
 
-  // Clone all overlay SVG content (defs + layers)
   Array.from(svgSrc.childNodes).forEach(node => svg.appendChild(node.cloneNode(true)));
 
+  if (silhouetteMode) {
+    svg.querySelectorAll("#layer-map .map-path").forEach(path => {
+      path.setAttribute("stroke", "none");
+      path.removeAttribute("stroke-width");
+    });
+
+    svg.querySelectorAll("#layer-markers circle").forEach(circle => {
+      if (circle.getAttribute("stroke") === "#fff") {
+        circle.setAttribute("stroke", "none");
+        circle.removeAttribute("stroke-width");
+      }
+    });
+
+    svg.querySelectorAll("#layer-route .transport-icon circle").forEach(circle => {
+      circle.setAttribute("fill", style.routeColor);
+      circle.setAttribute("fill-opacity", style.routeOpacity);
+      circle.setAttribute("stroke", "none");
+      circle.removeAttribute("stroke-width");
+    });
+  }
+
+  return svg;
+}
+
+function exportSVG() {
+  const svg = buildOverlayExportSVG(true);
   const serialized = new XMLSerializer().serializeToString(svg);
   const blob = new Blob([serialized], { type:"image/svg+xml" });
   const url  = URL.createObjectURL(blob);
@@ -2250,8 +2339,49 @@ async function exportPNG() {
   }
 }
 
+async function exportSilhouettePNG() {
+  const svg = buildOverlayExportSVG(false, true);
+  const serialized = new XMLSerializer().serializeToString(svg);
+  const blob = new Blob([serialized], { type:"image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const img = new Image();
+  const baseWidth = svg.viewBox.baseVal.width || svg.width.baseVal.value;
+  const baseHeight = svg.viewBox.baseVal.height || svg.height.baseVal.value;
+  const scale = Math.max(3, Math.min(5, Math.ceil(window.devicePixelRatio || 1) * 2));
+
+  setStatus("Rendering silhouette…");
+
+  try {
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = () => reject(new Error("Silhouette image could not be created."));
+      img.src = url;
+    });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(baseWidth * scale);
+    canvas.height = Math.round(baseHeight * scale);
+    const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    const a = document.createElement("a");
+    a.href = canvas.toDataURL("image/png");
+    a.download = (document.getElementById("place-input").value.trim() || "map") + "-silhouette.png";
+    a.click();
+    setStatus("Silhouette exported.", true);
+  } catch(err) {
+    setStatus("Silhouette export failed: " + err.message);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 document.getElementById("export-svg-btn").addEventListener("click", exportSVG);
 document.getElementById("export-png-btn").addEventListener("click", exportPNG);
+document.getElementById("export-silhouette-btn").addEventListener("click", exportSilhouettePNG);
 
 
 // ─── Theme Toggle ─────────────────────────────────────────────────────────────

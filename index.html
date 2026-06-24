@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Map Composer</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css" />
-  <link rel="stylesheet" href="styles.css?v=20260420-gadm6">
+  <link rel="stylesheet" href="styles.css?v=20260506-sil3">
 </head>
 <body>
 <div class="app-wrapper">
@@ -31,6 +31,10 @@
       <button class="hbtn hbtn-accent" id="export-png-btn" title="Export as PNG (full map)">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1v9M4 6l4 4 4-4M2 13h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
         PNG
+      </button>
+      <button class="hbtn" id="export-silhouette-btn" title="Export silhouette as transparent PNG">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1v9M4 6l4 4 4-4M2 13h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        SIL
       </button>
       <div class="hbtn-divider"></div>
       <button class="hbtn hbtn-icon" id="theme-btn" title="Toggle light / dark theme">
@@ -218,6 +222,11 @@
             <span class="range-val" id="route-opacity-val">0.85</span>
           </div>
           <div class="control-row">
+            <span>Arrow size</span>
+            <input type="range" id="route-arrow-size" min="6" max="24" value="12" step="1" />
+            <span class="range-val" id="route-arrow-size-val">12</span>
+          </div>
+          <div class="control-row">
             <span>Line style</span>
             <select id="route-dash" class="select-input">
               <option value="none">Solid</option>
@@ -315,6 +324,6 @@
 <script src="https://cdn.jsdelivr.net/npm/leaflet.gridlayer.googlemutant@0.13.4/dist/Leaflet.GoogleMutant.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-<script src="script.js?v=20260420-gadm6"></script>
+<script src="script.js?v=20260506-sil3"></script>
 </body>
 </html>
