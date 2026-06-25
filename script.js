@@ -749,12 +749,15 @@ function initLeaflet() {
     zoom: 2,
     zoomControl: false,        // custom position below
     attributionControl: true,
+    zoomSnap: 0.25,
+    zoomDelta: 0.25,
+    wheelPxPerZoomLevel: 160,
   });
 
   L.control.zoom({ position: "bottomright" }).addTo(leafletMap);
 
   // Re-render SVG overlay whenever the map view changes
-  leafletMap.on("zoomend moveend resize", renderAll);
+  leafletMap.on("zoom zoomend moveend resize", renderAll);
 }
 
 
@@ -822,9 +825,14 @@ function getSegmentPts(routePoints, index) {
   return pts;
 }
 
+function isSegmentShown(routePoints, index) {
+  return routePoints[index]?.src?.showSegmentAfter !== false;
+}
+
 function buildAllRoutePts(routePoints) {
   const allPts = [];
   for (let i = 0; i < routePoints.length - 1; i++) {
+    if (!isSegmentShown(routePoints, i)) continue;
     const segPts = getSegmentPts(routePoints, i);
     segPts.forEach((pt, idx) => {
       if (i > 0 && idx === 0) return;
@@ -916,15 +924,17 @@ function buildSegmentPath(routePoints, index) {
 }
 
 function getSegmentTransportMeta(routePoints, index) {
+  const shown = isSegmentShown(routePoints, index);
   const transport = routePoints[index]?.src?.transportAfter || "none";
   const opt = TRANSPORT_OPTIONS.find(o => o.value === transport) || TRANSPORT_OPTIONS[0];
   const isDotted = opt.mode === "air" || opt.mode === "water";
   return {
+    shown,
     transport,
     option: opt,
     isDotted,
-    showArrow: !isDotted,
-    showIcon: isDotted && !!opt.icon,
+    showArrow: shown && !isDotted,
+    showIcon: shown && isDotted && !!opt.icon,
   };
 }
 
@@ -969,6 +979,7 @@ function renderRoute() {
   const allPts = buildAllRoutePts(routePoints);
   const segmentPaths = [];
   for (let i = 0; i < routePoints.length - 1; i++) {
+    if (!isSegmentShown(routePoints, i)) continue;
     segmentPaths.push({ index: i, d: buildSegmentPath(routePoints, i), meta: getSegmentTransportMeta(routePoints, i) });
   }
 
@@ -1052,6 +1063,10 @@ function renderRoute() {
         txt.setAttribute("dominant-baseline", "central");
         txt.setAttribute("font-size", (iconR * 1.15).toFixed(1));
         txt.setAttribute("font-family", "Apple Color Emoji,Segoe UI Emoji,sans-serif");
+        if (meta.transport === "plane") {
+          const planeAngle = angle + 45;
+          txt.setAttribute("transform", "rotate(" + planeAngle.toFixed(1) + " " + pm.x.toFixed(1) + " " + pm.y.toFixed(1) + ")");
+        }
         txt.textContent = meta.option.icon;
 
         grp.appendChild(circle);
@@ -1676,6 +1691,7 @@ function createPoint(query, category="city") {
     markerOffset:{dx:0,dy:0}, labelOffset:{dx:10,dy:-13},
     visible:true, labelVisible:true, inRoute:true,
     transportAfter:"none",          // transport type used to reach the NEXT point
+    showSegmentAfter:true,          // whether to draw the segment to the NEXT point
     status:"loading", candidates:[], error:null,
   };
 }
@@ -1786,6 +1802,26 @@ function renderPointList() {
 
       tsec.appendChild(tlabel);
       tsec.appendChild(tsel);
+
+      const showRow = document.createElement("label");
+      showRow.className = "pt-segment-toggle";
+
+      const showChk = document.createElement("input");
+      showChk.type = "checkbox";
+      showChk.checked = p.showSegmentAfter !== false;
+      showChk.title = "Show the route line from this stop to the next one";
+      showChk.addEventListener("change", () => {
+        p.showSegmentAfter = showChk.checked;
+        renderRoute();
+      });
+      showChk.addEventListener("mousedown", e => e.stopPropagation());
+
+      const showTxt = document.createElement("span");
+      showTxt.textContent = "Show line to next stop";
+
+      showRow.appendChild(showChk);
+      showRow.appendChild(showTxt);
+      tsec.appendChild(showRow);
       info.appendChild(tsec);
     }
 
@@ -2403,11 +2439,54 @@ function applyTheme(theme) {
   }
 }
 
+function syncMapFocusUI(isFocused) {
+  const btn = document.getElementById("focus-map-btn");
+  const label = document.getElementById("focus-map-btn-label");
+  if (btn) {
+    btn.classList.toggle("is-active", isFocused);
+    btn.setAttribute("aria-pressed", isFocused ? "true" : "false");
+    btn.title = isFocused ? "Exit focus view" : "Focus map view";
+  }
+  if (label) label.textContent = isFocused ? "Exit" : "Focus";
+}
+
+function refreshMapViewport() {
+  renderAll();
+  requestAnimationFrame(() => {
+    window.setTimeout(() => {
+      leafletMap?.invalidateSize(false);
+      renderAll();
+    }, 220);
+  });
+}
+
+function setMapFocus(isFocused) {
+  const wrapper = document.querySelector(".app-wrapper");
+  if (!wrapper) return;
+  wrapper.classList.toggle("map-focus", isFocused);
+  syncMapFocusUI(isFocused);
+  refreshMapViewport();
+}
+
 document.getElementById("theme-btn").addEventListener("click", () => {
   const current = document.documentElement.getAttribute("data-theme") || "light";
   const next    = current === "dark" ? "light" : "dark";
   applyTheme(next);
   localStorage.setItem("app-theme", next);
+});
+
+document.getElementById("focus-map-btn").addEventListener("click", () => {
+  const wrapper = document.querySelector(".app-wrapper");
+  const isFocused = wrapper?.classList.contains("map-focus");
+  setMapFocus(!isFocused);
+});
+
+document.getElementById("map-focus-exit").addEventListener("click", () => {
+  setMapFocus(false);
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") setMapFocus(false);
 });
 
 // Restore saved theme (or system preference)
@@ -2416,6 +2495,8 @@ document.getElementById("theme-btn").addEventListener("click", () => {
   const prefers = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   applyTheme(saved || prefers);
 })();
+
+syncMapFocusUI(false);
 
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────

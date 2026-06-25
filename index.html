@@ -37,6 +37,12 @@
         SIL
       </button>
       <div class="hbtn-divider"></div>
+      <button class="hbtn" id="focus-map-btn" title="Focus map view" aria-pressed="false">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span id="focus-map-btn-label">Focus</span>
+      </button>
       <button class="hbtn hbtn-icon" id="theme-btn" title="Toggle light / dark theme">
         <!-- icon swapped by JS -->
         <svg id="theme-icon-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -251,6 +257,9 @@
     <!-- ── CENTER: MAP ─────────────────────────────────────── -->
     <main class="map-area">
       <div class="preview-box">
+        <button id="map-focus-exit" class="map-focus-exit" title="Exit focus view">
+          Exit focus
+        </button>
 
         <div id="map-container"></div>
 
